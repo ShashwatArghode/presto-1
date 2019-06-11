@@ -68,6 +68,17 @@ public class CsvPrinter
     }
 
     @Override
+    public void printRow(List<?> row, boolean complete) throws IOException
+    {
+        if (needHeader) {
+            needHeader = false;
+            writer.writeNext(toStrings(fieldNames));
+        }
+        writer.writeNext(toStrings(row));
+        checkError();
+    }
+
+    @Override
     public void printRows(List<List<?>> rows, boolean complete)
             throws IOException
     {
