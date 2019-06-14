@@ -24,11 +24,6 @@ public class NullPrinter
     }
 
     @Override
-    public void printRow(List<?> row, boolean complete)
-    {
-    }
-
-    @Override
     public void finish()
     {
     }

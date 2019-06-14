@@ -248,7 +248,6 @@ class StatementClientV1
     @Override
     public QueryStatusInfo currentStatusInfo()
     {
-        checkState(isRunning(), "current position is not valid (cursor past end)");
         return currentResults.get();
     }
 
@@ -347,7 +346,6 @@ class StatementClientV1
             state.compareAndSet(State.RUNNING, State.FINISHED);
             return false;
         }
-
         Request request = prepareRequest(HttpUrl.get(nextUri)).build();
 
         Exception cause = null;

@@ -247,10 +247,9 @@ public class PrestoStatement
             WarningsManager warningsManager = new WarningsManager();
             currentWarningsManager.set(Optional.of(warningsManager));
             resultSet = new PrestoResultSet(client, maxRows.get(), progressConsumer, warningsManager);
-            String updateType = client.isFinished() ? client.finalStatusInfo().getUpdateType() : client.currentStatusInfo().getUpdateType();
 
             // check if this is a query
-            if (updateType == null) {
+            if (client.currentStatusInfo().getUpdateType() == null) {
                 currentResult.set(resultSet);
                 return true;
             }

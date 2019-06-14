@@ -16,6 +16,7 @@ package io.prestosql.jdbc;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.prestosql.client.Column;
 import io.prestosql.client.IntervalDayTime;
 import io.prestosql.client.IntervalYearMonth;
@@ -59,6 +60,8 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -162,6 +165,7 @@ public class PrestoResultSet
             throws SQLException
     {
         closed.set(true);
+        ((AsyncIterator) results).cancel();
         client.close();
     }
 
@@ -1760,20 +1764,19 @@ public class PrestoResultSet
             implements Iterator<T>
     {
         private static final int MAX_QUEUED_ROWS = 50_000;
+        private static ThreadFactoryBuilder threadFactoryBuilder = new ThreadFactoryBuilder().setDaemon(true)
+                .setNameFormat("async-client-datafetch-%d");
+
+        private static final ExecutorService executorService = Executors.newCachedThreadPool(threadFactoryBuilder.build());
+
         private final BlockingQueue<T> rowQueue = new LinkedBlockingQueue<>(MAX_QUEUED_ROWS);
         Iterator<T> dataItr;
         CompletableFuture<Void> future;
 
-        static {
-            if (System.getProperty("java.util.concurrent.ForkJoinPool.common.parallelism") == null) {
-                System.setProperty("java.util.concurrent.ForkJoinPool.common.parallelism", "24");
-            }
-        }
-
         public AsyncIterator(Iterator<T> dataItr)
         {
             this.dataItr = dataItr;
-            future = CompletableFuture.runAsync(() -> {
+            future = CompletableFuture.supplyAsync(() -> {
                 while (dataItr.hasNext()) {
                     try {
                         rowQueue.put(dataItr.next());
@@ -1782,7 +1785,13 @@ public class PrestoResultSet
                         throw new RuntimeException(ex);
                     }
                 }
-            });
+                return null;
+            }, executorService);
+        }
+
+        public void cancel()
+        {
+            future.cancel(true);
         }
 
         @Override
