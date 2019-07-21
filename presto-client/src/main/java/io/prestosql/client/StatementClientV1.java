@@ -346,6 +346,7 @@ class StatementClientV1
             state.compareAndSet(State.RUNNING, State.FINISHED);
             return false;
         }
+
         Request request = prepareRequest(HttpUrl.get(nextUri)).build();
 
         Exception cause = null;

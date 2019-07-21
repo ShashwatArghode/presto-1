@@ -13,10 +13,10 @@
  */
 package io.prestosql.jdbc;
 
+import com.google.common.base.Throwables;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.prestosql.client.Column;
 import io.prestosql.client.IntervalDayTime;
 import io.prestosql.client.IntervalYearMonth;
@@ -61,7 +61,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -71,11 +70,13 @@ import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Iterators.concat;
 import static com.google.common.collect.Iterators.transform;
+import static io.airlift.concurrent.Threads.daemonThreadsNamed;
 import static io.prestosql.jdbc.ColumnInfo.setTypeInfo;
 import static java.lang.String.format;
 import static java.math.BigDecimal.ROUND_HALF_UP;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
+import static java.util.concurrent.Executors.newCachedThreadPool;
 
 public class PrestoResultSet
         implements ResultSet
@@ -1764,25 +1765,23 @@ public class PrestoResultSet
             implements Iterator<T>
     {
         private static final int MAX_QUEUED_ROWS = 50_000;
-        private static ThreadFactoryBuilder threadFactoryBuilder = new ThreadFactoryBuilder().setDaemon(true)
-                .setNameFormat("async-client-datafetch-%d");
-
-        private static final ExecutorService executorService = Executors.newCachedThreadPool(threadFactoryBuilder.build());
+        private static final ExecutorService executorService = newCachedThreadPool(daemonThreadsNamed("Presto JDBC worker-%d"));
 
         private final BlockingQueue<T> rowQueue = new LinkedBlockingQueue<>(MAX_QUEUED_ROWS);
-        Iterator<T> dataItr;
+        Iterator<T> dataIterator;
         CompletableFuture<Void> future;
 
-        public AsyncIterator(Iterator<T> dataItr)
+        public AsyncIterator(Iterator<T> dataIterator)
         {
-            this.dataItr = dataItr;
+            this.dataIterator = dataIterator;
             future = CompletableFuture.supplyAsync(() -> {
-                while (dataItr.hasNext()) {
+                while (dataIterator.hasNext()) {
                     try {
-                        rowQueue.put(dataItr.next());
+                        rowQueue.put(dataIterator.next());
                     }
-                    catch (InterruptedException ex) {
-                        throw new RuntimeException(ex);
+                    catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(e);
                     }
                 }
                 return null;
@@ -1801,14 +1800,19 @@ public class PrestoResultSet
                 return true;
             }
             while (rowQueue.isEmpty() && !future.isDone()) {
-                // making sure rowQueue has some records to process oe will return false
+                // making sure rowQueue has some records to process or return false
             }
             if (future.isCompletedExceptionally()) {
                 try {
                     future.get();
                 }
-                catch (ExecutionException | InterruptedException ex) {
-                    throw new RuntimeException(ex);
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+                catch (ExecutionException e) {
+                    Throwables.throwIfUnchecked(e.getCause());
+                    throw new RuntimeException(e.getCause());
                 }
             }
             return !rowQueue.isEmpty();
