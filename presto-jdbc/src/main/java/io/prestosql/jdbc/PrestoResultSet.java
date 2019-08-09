@@ -127,7 +127,7 @@ public class PrestoResultSet
         this.columnInfoList = getColumnInfo(columns);
         this.resultSetMetaData = new PrestoResultSetMetaData(columnInfoList);
 
-        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager), maxRows));
+        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager, Thread.currentThread()), maxRows));
     }
 
     public String getQueryId()
@@ -1781,7 +1781,7 @@ public class PrestoResultSet
                     }
                     catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        throw new RuntimeException(e);
+                        throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
                     }
                 }
                 return null;
@@ -1808,7 +1808,7 @@ public class PrestoResultSet
                 }
                 catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    throw new RuntimeException(e);
+                    throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
                 }
                 catch (ExecutionException e) {
                     Throwables.throwIfUnchecked(e.getCause());
@@ -1831,12 +1831,14 @@ public class PrestoResultSet
         private final StatementClient client;
         private final Consumer<QueryStats> progressCallback;
         private final WarningsManager warningsManager;
+        private Thread parent;
 
-        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager)
+        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager, Thread parent)
         {
             this.client = requireNonNull(client, "client is null");
             this.progressCallback = requireNonNull(progressCallback, "progressCallback is null");
             this.warningsManager = requireNonNull(warningsManager, "warningsManager is null");
+            this.parent = parent;
         }
 
         @Override
@@ -1876,7 +1878,7 @@ public class PrestoResultSet
 
         private void checkInterruption(Throwable t)
         {
-            if (Thread.currentThread().isInterrupted()) {
+            if (Thread.currentThread().isInterrupted() || parent.isInterrupted()) {
                 client.close();
                 throw new RuntimeException(new SQLException("ResultSet thread was interrupted", t));
             }
