@@ -13,7 +13,6 @@
  */
 package io.prestosql.jdbc;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -66,6 +65,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static com.google.common.base.Throwables.throwIfUnchecked;
 import static com.google.common.base.Verify.verify;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.common.collect.Iterators.concat;
@@ -127,7 +127,7 @@ public class PrestoResultSet
         this.columnInfoList = getColumnInfo(columns);
         this.resultSetMetaData = new PrestoResultSetMetaData(columnInfoList);
 
-        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager, Thread.currentThread()), maxRows));
+        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager/*, Thread.currentThread()*/), maxRows), client);
     }
 
     public String getQueryId()
@@ -1767,19 +1767,21 @@ public class PrestoResultSet
         private static final int MAX_QUEUED_ROWS = 50_000;
         private static final ExecutorService executorService = newCachedThreadPool(daemonThreadsNamed("Presto JDBC worker-%d"));
 
+        private final StatementClient client;
         private final BlockingQueue<T> rowQueue = new LinkedBlockingQueue<>(MAX_QUEUED_ROWS);
-        Iterator<T> dataIterator;
-        CompletableFuture<Void> future;
+        private final CompletableFuture<Void> future;
 
-        public AsyncIterator(Iterator<T> dataIterator)
+        public AsyncIterator(Iterator<T> dataIterator, StatementClient client)
         {
-            this.dataIterator = dataIterator;
-            future = CompletableFuture.supplyAsync(() -> {
+            requireNonNull(dataIterator, "dataIterator is null");
+            this.client = client;
+            this.future = CompletableFuture.supplyAsync(() -> {
                 while (dataIterator.hasNext()) {
                     try {
                         rowQueue.put(dataIterator.next());
                     }
                     catch (InterruptedException e) {
+                        client.close();
                         Thread.currentThread().interrupt();
                         throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
                     }
@@ -1807,11 +1809,12 @@ public class PrestoResultSet
                     future.get();
                 }
                 catch (InterruptedException e) {
+                    client.close();
                     Thread.currentThread().interrupt();
                     throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
                 }
                 catch (ExecutionException e) {
-                    Throwables.throwIfUnchecked(e.getCause());
+                    throwIfUnchecked(e.getCause());
                     throw new RuntimeException(e.getCause());
                 }
             }
@@ -1831,21 +1834,21 @@ public class PrestoResultSet
         private final StatementClient client;
         private final Consumer<QueryStats> progressCallback;
         private final WarningsManager warningsManager;
-        private Thread parent;
+        //private Thread parent;
 
-        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager, Thread parent)
+        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager)//, Thread parent)
         {
             this.client = requireNonNull(client, "client is null");
             this.progressCallback = requireNonNull(progressCallback, "progressCallback is null");
             this.warningsManager = requireNonNull(warningsManager, "warningsManager is null");
-            this.parent = parent;
+            //this.parent = parent;
         }
 
         @Override
         protected Iterable<List<Object>> computeNext()
         {
             while (client.isRunning()) {
-                checkInterruption(null);
+                //checkInterruption(null);
 
                 QueryStatusInfo results = client.currentStatusInfo();
                 progressCallback.accept(QueryStats.create(results.getId(), results.getStats()));
@@ -1856,7 +1859,7 @@ public class PrestoResultSet
                     client.advance();
                 }
                 catch (RuntimeException e) {
-                    checkInterruption(e);
+                    //checkInterruption(e);
                     throw e;
                 }
 
@@ -1876,13 +1879,13 @@ public class PrestoResultSet
             return endOfData();
         }
 
-        private void checkInterruption(Throwable t)
+        /*private void checkInterruption(Throwable t)
         {
             if (Thread.currentThread().isInterrupted() || parent.isInterrupted()) {
                 client.close();
                 throw new RuntimeException(new SQLException("ResultSet thread was interrupted", t));
             }
-        }
+        }*/
     }
 
     static SQLException resultsException(QueryStatusInfo results)

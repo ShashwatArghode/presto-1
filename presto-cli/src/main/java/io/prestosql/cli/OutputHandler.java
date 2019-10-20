@@ -13,7 +13,6 @@
  */
 package io.prestosql.cli;
 
-import com.google.common.base.Throwables;
 import com.google.common.collect.Queues;
 import io.prestosql.client.StatementClient;
 
@@ -27,6 +26,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.google.common.base.Throwables.propagateIfPossible;
 import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.SECONDS;
@@ -41,7 +41,6 @@ public final class OutputHandler
     private final AtomicBoolean closed = new AtomicBoolean();
     private final BlockingQueue<List<?>> rowQueue = new LinkedBlockingQueue<>(MAX_QUEUED_ROWS);
     private final OutputPrinter printer;
-    private List<List<?>> rowBuffer = new ArrayList<>();
 
     private CompletableFuture<Void> future;
 
@@ -62,6 +61,7 @@ public final class OutputHandler
     public void processRows(StatementClient client)
             throws IOException
     {
+        List<List<?>> rowBuffer = new ArrayList<>();
         this.future = CompletableFuture.runAsync(() -> {
             while (client.isRunning()) {
                 Iterable<List<Object>> data = client.currentData().getData();
@@ -82,7 +82,9 @@ public final class OutputHandler
         try {
             while (!future.isDone()) {
                 if (!rowQueue.isEmpty()) {
-                    drain(rowQueue);
+                    Queues.drain(rowQueue, rowBuffer, MIN_BUFFERED_ROWS, MAX_BUFFER_SECONDS, SECONDS);
+                    printer.printRows(unmodifiableList(rowBuffer), false);
+                    rowBuffer.clear();
                 }
             }
             while (!rowQueue.isEmpty()) {
@@ -98,16 +100,8 @@ public final class OutputHandler
             throw new RuntimeException(e);
         }
         catch (ExecutionException e) {
-            Throwables.throwIfUnchecked(e.getCause());
+            propagateIfPossible(e.getCause(), IOException.class);
             throw new RuntimeException(e.getCause());
         }
-    }
-
-    public void drain(BlockingQueue<List<?>> rowQueue)
-            throws InterruptedException, IOException
-    {
-        Queues.drain(rowQueue, rowBuffer, MIN_BUFFERED_ROWS, MAX_BUFFER_SECONDS, SECONDS);
-        printer.printRows(unmodifiableList(rowBuffer), false);
-        rowBuffer.clear();
     }
 }
