@@ -127,7 +127,7 @@ public class PrestoResultSet
         this.columnInfoList = getColumnInfo(columns);
         this.resultSetMetaData = new PrestoResultSetMetaData(columnInfoList);
 
-        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager, Thread.currentThread()), maxRows), client);
+        this.results = new AsyncIterator(flatten(new ResultsPageIterator(client, progressCallback, warningsManager), maxRows), client, Thread.currentThread());
     }
 
     public String getQueryId()
@@ -1770,10 +1770,12 @@ public class PrestoResultSet
         private final StatementClient client;
         private final BlockingQueue<T> rowQueue = new LinkedBlockingQueue<>(MAX_QUEUED_ROWS);
         private final CompletableFuture<Void> future;
+        private Thread parent;
 
-        public AsyncIterator(Iterator<T> dataIterator, StatementClient client)
+        public AsyncIterator(Iterator<T> dataIterator, StatementClient client, Thread parent)
         {
             requireNonNull(dataIterator, "dataIterator is null");
+            this.parent = parent;
             this.client = client;
             this.future = CompletableFuture.supplyAsync(() -> {
                 while (dataIterator.hasNext()) {
@@ -1781,9 +1783,7 @@ public class PrestoResultSet
                         rowQueue.put(dataIterator.next());
                     }
                     catch (InterruptedException e) {
-                        client.close();
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
+                        interrupt(e);
                     }
                 }
                 return null;
@@ -1795,23 +1795,31 @@ public class PrestoResultSet
             future.cancel(true);
         }
 
+        public void interrupt(InterruptedException e)
+        {
+            client.close();
+            Thread.currentThread().interrupt();
+            throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
+        }
+
         @Override
         public boolean hasNext()
         {
             if (!rowQueue.isEmpty()) {
                 return true;
             }
-            while (rowQueue.isEmpty() && !future.isDone()) {
+            while (!rowQueue.isEmpty() && !future.isDone()) {
                 // making sure rowQueue has some records to process or return false
+                if (parent.isInterrupted()) {
+                    interrupt(new InterruptedException("parent thread interrupted"));
+                }
             }
             if (future.isCompletedExceptionally()) {
                 try {
                     future.get();
                 }
                 catch (InterruptedException e) {
-                    client.close();
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException(new SQLException("ResultSet thread was interrupted", e));
+                    interrupt(e);
                 }
                 catch (ExecutionException e) {
                     throwIfUnchecked(e.getCause());
@@ -1834,21 +1842,18 @@ public class PrestoResultSet
         private final StatementClient client;
         private final Consumer<QueryStats> progressCallback;
         private final WarningsManager warningsManager;
-        private Thread parent;
 
-        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager, Thread parent)
+        private ResultsPageIterator(StatementClient client, Consumer<QueryStats> progressCallback, WarningsManager warningsManager)
         {
             this.client = requireNonNull(client, "client is null");
             this.progressCallback = requireNonNull(progressCallback, "progressCallback is null");
             this.warningsManager = requireNonNull(warningsManager, "warningsManager is null");
-            this.parent = parent;
         }
 
         @Override
         protected Iterable<List<Object>> computeNext()
         {
             while (client.isRunning()) {
-                checkInterruption(null);
 
                 QueryStatusInfo results = client.currentStatusInfo();
                 progressCallback.accept(QueryStats.create(results.getId(), results.getStats()));
@@ -1859,7 +1864,6 @@ public class PrestoResultSet
                     client.advance();
                 }
                 catch (RuntimeException e) {
-                    checkInterruption(e);
                     throw e;
                 }
 
@@ -1877,14 +1881,6 @@ public class PrestoResultSet
             }
 
             return endOfData();
-        }
-
-        private void checkInterruption(Throwable t)
-        {
-            if (Thread.currentThread().isInterrupted() || parent.isInterrupted()) {
-                client.close();
-                throw new RuntimeException(new SQLException("ResultSet thread was interrupted", t));
-            }
         }
     }
 
