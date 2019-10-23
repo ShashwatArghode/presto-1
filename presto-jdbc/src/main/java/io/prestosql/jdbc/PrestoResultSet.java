@@ -1854,7 +1854,6 @@ public class PrestoResultSet
         protected Iterable<List<Object>> computeNext()
         {
             while (client.isRunning()) {
-
                 QueryStatusInfo results = client.currentStatusInfo();
                 progressCallback.accept(QueryStats.create(results.getId(), results.getStats()));
                 warningsManager.addWarnings(results.getWarnings());
