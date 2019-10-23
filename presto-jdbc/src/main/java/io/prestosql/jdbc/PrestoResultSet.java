@@ -1808,7 +1808,7 @@ public class PrestoResultSet
             if (!rowQueue.isEmpty()) {
                 return true;
             }
-            while (!rowQueue.isEmpty() && !future.isDone()) {
+            while (rowQueue.isEmpty() && !future.isDone()) {
                 // making sure rowQueue has some records to process or return false
                 if (parent.isInterrupted()) {
                     interrupt(new InterruptedException("parent thread interrupted"));
