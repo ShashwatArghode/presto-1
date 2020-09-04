@@ -17,6 +17,7 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import io.airlift.configuration.Config;
 import io.airlift.configuration.validation.FileExists;
+import io.airlift.units.DataSize;
 
 import javax.validation.constraints.NotNull;
 
@@ -24,11 +25,15 @@ import java.io.File;
 import java.util.List;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static io.airlift.units.DataSize.Unit.MEGABYTE;
 
 public class AccessControlConfig
 {
     private static final Splitter SPLITTER = Splitter.on(',').trimResults().omitEmptyStrings();
     private List<File> accessControlFiles = ImmutableList.of();
+    private String auditLogPath;
+    private DataSize maxAuditSize = DataSize.of(100, MEGABYTE);
+    private int maxAuditHistory = 30;
 
     @NotNull
     public List<@FileExists File> getAccessControlFiles()
@@ -48,6 +53,42 @@ public class AccessControlConfig
     public AccessControlConfig setAccessControlFiles(List<File> accessControlFiles)
     {
         this.accessControlFiles = ImmutableList.copyOf(accessControlFiles);
+        return this;
+    }
+
+    public String getAuditLogPath()
+    {
+        return auditLogPath;
+    }
+
+    @Config("access-control.audit.log.path")
+    public AccessControlConfig setAuditLogPath(String auditLogPath)
+    {
+        this.auditLogPath = auditLogPath;
+        return this;
+    }
+
+    public DataSize getMaxAuditSize()
+    {
+        return maxAuditSize;
+    }
+
+    @Config("access-control.max.audit.size")
+    public AccessControlConfig setMaxAuditSize(DataSize maxAuditSize)
+    {
+        this.maxAuditSize = maxAuditSize;
+        return this;
+    }
+
+    public int getMaxAuditHistory()
+    {
+        return maxAuditHistory;
+    }
+
+    @Config("access-control.max.audit.history")
+    public AccessControlConfig setMaxAuditHistory(int maxAuditHistory)
+    {
+        this.maxAuditHistory = maxAuditHistory;
         return this;
     }
 }

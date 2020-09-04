@@ -46,7 +46,7 @@
         <dep.accumulo.version>1.7.4</dep.accumulo.version>
         <dep.accumulo-hadoop.version>2.7.7-1</dep.accumulo-hadoop.version>
         <dep.antlr.version>4.8</dep.antlr.version>
-        <dep.airlift.version>200</dep.airlift.version>
+        <dep.airlift.version>0.200-SNAPSHOT</dep.airlift.version>
         <dep.packaging.version>${dep.airlift.version}</dep.packaging.version>
         <dep.aws-sdk.version>1.11.749</dep.aws-sdk.version>
         <dep.okhttp.version>3.9.0</dep.okhttp.version>
@@ -88,7 +88,7 @@
         <module>presto-cassandra</module>
         <module>presto-cli</module>
         <module>presto-client</module>
-        <module>presto-docs</module>
+        <!--module>presto-docs</module-->
         <module>presto-druid</module>
         <module>presto-elasticsearch</module>
         <module>presto-example-http</module>

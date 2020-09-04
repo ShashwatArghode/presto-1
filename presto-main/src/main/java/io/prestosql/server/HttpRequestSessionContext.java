@@ -84,6 +84,7 @@ public final class HttpRequestSessionContext
 
     private static final Splitter DOT_SPLITTER = Splitter.on('.');
     public static final String AUTHENTICATED_IDENTITY = "presto.authenticated-identity";
+    public static final String IP_ADDRESS = "ip";
 
     private final String catalog;
     private final String schema;
@@ -120,7 +121,7 @@ public final class HttpRequestSessionContext
         assertRequest((catalog != null) || (schema == null), "Schema is set but catalog is not");
 
         this.authenticatedIdentity = requireNonNull(authenticatedIdentity, "authenticatedIdentity is null");
-        identity = buildSessionIdentity(authenticatedIdentity, headers, groupProvider);
+        identity = buildSessionIdentity(authenticatedIdentity, headers, groupProvider, remoteAddress);
 
         source = headers.getFirst(PRESTO_SOURCE);
         traceToken = Optional.ofNullable(trimEmptyToNull(headers.getFirst(PRESTO_TRACE_TOKEN)));
@@ -185,7 +186,7 @@ public final class HttpRequestSessionContext
     public static Identity extractAuthorizedIdentity(Optional<Identity> optionalAuthenticatedIdentity, MultivaluedMap<String, String> headers, AccessControl accessControl, GroupProvider groupProvider)
             throws AccessDeniedException
     {
-        Identity identity = buildSessionIdentity(optionalAuthenticatedIdentity, headers, groupProvider);
+        Identity identity = buildSessionIdentity(optionalAuthenticatedIdentity, headers, groupProvider, null);
 
         accessControl.checkCanSetUser(identity.getPrincipal(), identity.getUser());
 
@@ -200,7 +201,7 @@ public final class HttpRequestSessionContext
         return identity;
     }
 
-    private static Identity buildSessionIdentity(Optional<Identity> authenticatedIdentity, MultivaluedMap<String, String> headers, GroupProvider groupProvider)
+    private static Identity buildSessionIdentity(Optional<Identity> authenticatedIdentity, MultivaluedMap<String, String> headers, GroupProvider groupProvider, String remoteUserAddress)
     {
         String prestoUser = trimEmptyToNull(headers.getFirst(PRESTO_USER));
         String user = prestoUser != null ? prestoUser : authenticatedIdentity.map(Identity::getUser).orElse(null);
@@ -211,6 +212,7 @@ public final class HttpRequestSessionContext
                 .withAdditionalRoles(parseRoleHeaders(headers))
                 .withAdditionalExtraCredentials(parseExtraCredentials(headers))
                 .withAdditionalGroups(groupProvider.getGroups(user))
+                .withIdentityMetadata(IP_ADDRESS, remoteUserAddress)
                 .build();
     }
 

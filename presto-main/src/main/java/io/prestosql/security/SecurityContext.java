@@ -85,4 +85,14 @@ public class SecurityContext
         // this is needed by io.prestosql.sql.analyzer.Analysis.AccessControlInfo
         return Objects.hash(transactionId, identity, queryId);
     }
+
+    @Override
+    public String toString()
+    {
+        StringBuilder sb = new StringBuilder("SecurityContext{");
+        sb.append("identity='").append(identity);
+        sb.append(", queryId=").append(queryId);
+        sb.append('}');
+        return sb.toString();
+    }
 }

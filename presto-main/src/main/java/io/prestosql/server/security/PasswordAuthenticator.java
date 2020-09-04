@@ -28,6 +28,8 @@ import static java.util.Objects.requireNonNull;
 public class PasswordAuthenticator
         implements Authenticator
 {
+    private static final String PASSWORD_AUTH_TYPE = "PASSWORD";
+
     private final PasswordAuthenticatorManager authenticatorManager;
     private final UserMapping userMapping;
 
@@ -55,6 +57,7 @@ public class PasswordAuthenticator
             String authenticatedUser = userMapping.mapUser(principal.toString());
             return Identity.forUser(authenticatedUser)
                     .withPrincipal(principal)
+                    .withIdentityMetadata(AUTHENTICATION_TYPE, PASSWORD_AUTH_TYPE)
                     .build();
         }
         catch (UserMappingException | AccessDeniedException e) {

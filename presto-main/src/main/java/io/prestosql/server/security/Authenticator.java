@@ -19,6 +19,7 @@ import javax.ws.rs.container.ContainerRequestContext;
 
 public interface Authenticator
 {
+    String AUTHENTICATION_TYPE = "authType";
     Identity authenticate(ContainerRequestContext request)
             throws AuthenticationException;
 }

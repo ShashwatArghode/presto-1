@@ -30,6 +30,7 @@ public class CertificateAuthenticator
         implements Authenticator
 {
     private static final String X509_ATTRIBUTE = "javax.servlet.request.X509Certificate";
+    private static final String CERTIFICATE_AUTH_TYPE = "CERTIFICATE";
 
     private final CertificateAuthenticatorManager authenticatorManager;
     private final UserMapping userMapping;
@@ -61,6 +62,7 @@ public class CertificateAuthenticator
             String authenticatedUser = userMapping.mapUser(principal.toString());
             return Identity.forUser(authenticatedUser)
                     .withPrincipal(principal)
+                    .withIdentityMetadata(AUTHENTICATION_TYPE, CERTIFICATE_AUTH_TYPE)
                     .build();
         }
         catch (UserMappingException e) {

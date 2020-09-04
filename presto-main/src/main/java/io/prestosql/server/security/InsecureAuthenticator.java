@@ -30,6 +30,8 @@ import static java.util.Objects.requireNonNull;
 public class InsecureAuthenticator
         implements Authenticator
 {
+    private static final String NONE_AUTH_TYPE = "NONE";
+
     private final UserMapping userMapping;
 
     @Inject
@@ -64,6 +66,7 @@ public class InsecureAuthenticator
             String authenticatedUser = userMapping.mapUser(user);
             return Identity.forUser(authenticatedUser)
                     .withPrincipal(new BasicPrincipal(user))
+                    .withIdentityMetadata(AUTHENTICATION_TYPE, NONE_AUTH_TYPE)
                     .build();
         }
         catch (UserMappingException e) {

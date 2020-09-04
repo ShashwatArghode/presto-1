@@ -32,6 +32,7 @@ public class Identity
     private final Map<String, SelectedRole> roles;
     private final Map<String, String> extraCredentials;
     private final Optional<Runnable> onDestroy;
+    private final Map<String, String> identityMetadata;
 
     private Identity(
             String user,
@@ -39,7 +40,8 @@ public class Identity
             Optional<Principal> principal,
             Map<String, SelectedRole> roles,
             Map<String, String> extraCredentials,
-            Optional<Runnable> onDestroy)
+            Optional<Runnable> onDestroy,
+            Map<String, String> identityMetadata)
     {
         this.user = requireNonNull(user, "user is null");
         this.groups = Set.copyOf(requireNonNull(groups, "groups is null"));
@@ -47,6 +49,7 @@ public class Identity
         this.roles = Map.copyOf(requireNonNull(roles, "roles is null"));
         this.extraCredentials = Map.copyOf(requireNonNull(extraCredentials, "extraCredentials is null"));
         this.onDestroy = requireNonNull(onDestroy, "onDestroy is null");
+        this.identityMetadata = Map.copyOf(requireNonNull(identityMetadata, "identityMetadata is null"));
     }
 
     public String getUser()
@@ -72,6 +75,11 @@ public class Identity
     public Map<String, String> getExtraCredentials()
     {
         return extraCredentials;
+    }
+
+    public Map<String, String> getIdentityMetadata()
+    {
+        return identityMetadata;
     }
 
     public ConnectorIdentity toConnectorIdentity()
@@ -126,6 +134,7 @@ public class Identity
         principal.ifPresent(principal -> sb.append(", principal=").append(principal));
         sb.append(", roles=").append(roles);
         sb.append(", extraCredentials=").append(extraCredentials.keySet());
+        sb.append(", identityMetadata=").append(identityMetadata);
         sb.append('}');
         return sb.toString();
     }
@@ -146,7 +155,8 @@ public class Identity
                 .withGroups(identity.getGroups())
                 .withPrincipal(identity.getPrincipal())
                 .withRoles(identity.getRoles())
-                .withExtraCredentials(identity.getExtraCredentials());
+                .withExtraCredentials(identity.getExtraCredentials())
+                .withIdentityMetadataMap(identity.getIdentityMetadata());
     }
 
     public static class Builder
@@ -157,6 +167,7 @@ public class Identity
         private Map<String, SelectedRole> roles = new HashMap<>();
         private Map<String, String> extraCredentials = new HashMap<>();
         private Optional<Runnable> onDestroy = Optional.empty();
+        private final Map<String, String> identityMetadata = new HashMap<>();
 
         public Builder(String user)
         {
@@ -235,9 +246,24 @@ public class Identity
             return this;
         }
 
+        public Builder withIdentityMetadataMap(Map<String, String> identityMetadata)
+        {
+            this.identityMetadata.putAll(requireNonNull(identityMetadata, "identityMetadata is null"));
+            return this;
+        }
+
+        public Builder withIdentityMetadata(String key, String value)
+        {
+            requireNonNull(key, "identityMetadata key cannot be null");
+            if (value != null) {
+                this.identityMetadata.put(key, value);
+            }
+            return this;
+        }
+
         public Identity build()
         {
-            return new Identity(user, groups, principal, roles, extraCredentials, onDestroy);
+            return new Identity(user, groups, principal, roles, extraCredentials, onDestroy, identityMetadata);
         }
     }
 

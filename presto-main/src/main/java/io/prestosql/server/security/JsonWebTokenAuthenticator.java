@@ -57,6 +57,7 @@ public class JsonWebTokenAuthenticator
     private static final String DEFAULT_KEY = "default-key";
     private static final CharMatcher INVALID_KID_CHARS = inRange('a', 'z').or(inRange('A', 'Z')).or(inRange('0', '9')).or(CharMatcher.anyOf("_-")).negate();
     private static final String KEY_ID_VARIABLE = "${KID}";
+    private static final String JWT_AUTH_TYPE = "JWT";
 
     private final JwtParser jwtParser;
     private final Function<JwsHeader<?>, Key> keyLoader;
@@ -124,6 +125,7 @@ public class JsonWebTokenAuthenticator
             String authenticatedUser = userMapping.mapUser(subject);
             return Identity.forUser(authenticatedUser)
                     .withPrincipal(new BasicPrincipal(subject))
+                    .withIdentityMetadata(AUTHENTICATION_TYPE, JWT_AUTH_TYPE)
                     .build();
         }
         catch (JwtException | UserMappingException e) {

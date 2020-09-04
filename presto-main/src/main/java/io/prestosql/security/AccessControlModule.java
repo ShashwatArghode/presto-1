@@ -19,6 +19,7 @@ import com.google.inject.Provides;
 import com.google.inject.Scopes;
 import com.google.inject.Singleton;
 import io.airlift.log.Logger;
+import io.prestosql.plugin.base.util.AuditInvocationHandler;
 import io.prestosql.plugin.base.util.LoggingInvocationHandler;
 import io.prestosql.spi.security.GroupProvider;
 
@@ -41,8 +42,20 @@ public class AccessControlModule
 
     @Provides
     @Singleton
-    public AccessControl createAccessControl(AccessControlManager accessControlManager)
+    public AccessControl createAccessControl(AccessControlManager accessControlManager, AccessControlConfig accessControlConfig)
     {
+        if (accessControlConfig.getAuditLogPath() != null) {
+            AccessControl auditInvocationsAccessControl = newProxy(
+                    AccessControl.class,
+                    new AuditInvocationHandler(
+                            accessControlManager,
+                            new AuditInvocationHandler.ReflectiveParameterNamesProvider(),
+                            accessControlConfig.getAuditLogPath(),
+                            accessControlConfig.getMaxAuditHistory(),
+                            accessControlConfig.getMaxAuditSize()));
+            return auditInvocationsAccessControl;
+        }
+
         Logger logger = Logger.get(AccessControl.class);
 
         AccessControl loggingInvocationsAccessControl = newProxy(

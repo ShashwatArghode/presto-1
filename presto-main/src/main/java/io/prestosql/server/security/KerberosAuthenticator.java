@@ -58,6 +58,7 @@ public class KerberosAuthenticator
     private static final Logger LOG = Logger.get(KerberosAuthenticator.class);
 
     private static final String NEGOTIATE_SCHEME = "Negotiate";
+    private static final String KERBEROS_AUTH_TYPE = "KERBEROS";
 
     private final GSSManager gssManager = GSSManager.getInstance();
     private final LoginContext loginContext;
@@ -168,6 +169,7 @@ public class KerberosAuthenticator
             String authenticatedUser = userMapping.mapUser(principal.toString());
             return Identity.forUser(authenticatedUser)
                     .withPrincipal(principal)
+                    .withIdentityMetadata(AUTHENTICATION_TYPE, KERBEROS_AUTH_TYPE)
                     .build();
         }
         catch (UserMappingException e) {
