@@ -252,4 +252,10 @@
             <unpack />
         </artifact>
     </artifactSet>
+
+    <artifactSet to="plugin/datasketches">
+        <artifact id="${project.groupId}:presto-datasketches:zip:${project.version}">
+            <unpack />
+        </artifact>
+    </artifactSet>
 </runtime>
